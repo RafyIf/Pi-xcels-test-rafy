@@ -1,12 +1,12 @@
 const express = require("express");
 const path = require("path");
-
+const fs = require("fs");
 const app = express();
 
 // PWAs want HTTPS!
 function checkHttps(request, response, next) {
   // Check the protocol — if http, redirect to https.
-  if (request.get("X-Forwarded-Proto").indexOf("https") != -1) {
+  if (request.secure) {
     return next();
   } else {
     response.redirect("https://" + request.hostname + request.url);
@@ -21,10 +21,43 @@ app.get("/api/ping", (request, response) => {
   response.send("pong!");
 });
 
-// A mock route to return some data.
+// get List Movie
 app.get("/api/movies", (request, response) => {
+  const { current_page = 1, per_page_items = 10 } = request.query;
+  let rawData = fs.readFileSync(
+    path.resolve(__dirname, "movies_metadata.json")
+  );
+  let movies = JSON.parse(rawData);
+  let page = Number(current_page),
+    per_page = Number(per_page_items),
+    offset = (page - 1) * per_page,
+    paginatedItems = movies.slice(offset).slice(0, per_page_items),
+    total_pages = Math.ceil(movies.length / per_page);
+
   console.log("❇️ Received GET request to /api/movies");
-  response.json({ data: [{ id: 1, name: '1' }, { id: 2, name: '2' }] });
+  response.json({
+    status: "success",
+    page: page,
+    per_page: per_page,
+    pre_page: page - 1 ? page - 1 : null,
+    next_page: total_pages > page ? page + 1 : null,
+    total: movies.length,
+    total_pages: total_pages,
+    data: paginatedItems,
+  });
+});
+
+//get Single movie by ID
+app.get("/api/movies/:id", (request, response) => {
+  let rawData = fs.readFileSync(
+    path.resolve(__dirname, "movies_metadata.json")
+  );
+  let dbMovies = JSON.parse(rawData);
+  let movie = dbMovies.find((movies, index) => {
+    if (movies.id === Number(request.params.id)) return true;
+  });
+  console.log("❇️ Received GET request to /api/movies/:id");
+  response.json({ status: "success", data: movie });
 });
 
 // Express port-switching logic
